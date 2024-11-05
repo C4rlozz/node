@@ -1,0 +1,250 @@
+Passo 1: Criação do Banco de Dados e Tabelas (MySQL)
+Primeiro, o banco de dados aula10_tarefa e as tabelas Aluno e Disciplina. O código SQL abaixo fará isso:
+
+sql
+Copiar código
+-- Criar o banco de dados
+CREATE DATABASE aula10_tarefa;
+
+-- Usar o banco de dados
+USE aula10_tarefa;
+
+-- Criar a tabela Disciplina
+CREATE TABLE Disciplina (
+    id INT AUTO_INCREMENT PRIMARY KEY,  -- Chave primária para a disciplina
+    nome VARCHAR(255) NOT NULL,         -- Nome da disciplina
+    cargaHoraria INT NOT NULL,          -- Carga horária da disciplina
+    sala VARCHAR(50) NOT NULL           -- Sala onde a disciplina é ministrada
+);
+
+-- Criar a tabela Aluno
+CREATE TABLE Aluno (
+    id INT AUTO_INCREMENT PRIMARY KEY,  -- Chave primária para o aluno
+    nome VARCHAR(255) NOT NULL,         -- Nome do aluno
+    idade INT NOT NULL,                 -- Idade do aluno
+    ra VARCHAR(20) NOT NULL UNIQUE,     -- Registro acadêmico único do aluno
+    fk_idTurma INT,                    -- Chave estrangeira para a disciplina
+    FOREIGN KEY (fk_idTurma) REFERENCES Disciplina(id) ON DELETE CASCADE -- Relacionamento com a tabela Disciplina
+);
+Descrição das Tabelas:
+Disciplina: Contém informações sobre as disciplinas.
+
+id: Identificador único da disciplina.
+nome: Nome da disciplina (ex.: "Matemática", "Física").
+cargaHoraria: Quantidade de horas que a disciplina tem.
+sala: Sala onde as aulas acontecem.
+Aluno: Contém informações sobre os alunos.
+
+id: Identificador único do aluno.
+nome: Nome do aluno.
+idade: Idade do aluno.
+ra: Registro acadêmico único do aluno.
+fk_idTurma: Chave estrangeira que referencia a disciplina associada ao aluno.
+Passo 2: Desenvolvimento da API (Express.js + MySQL)
+Agora, vamos criar a API RESTful com as rotas requisitadas. O backend será desenvolvido com o Node.js utilizando o framework Express.js e o banco de dados MySQL.
+
+Aqui está o esboço da implementação da API:
+
+Estrutura de Arquivos do Projeto:
+lua
+Copiar código
+/aula10_tarefa
+|-- /node_modules
+|-- /public
+|-- server.js
+|-- package.json
+Código da API (server.js):
+javascript
+Copiar código
+const express = require('express');
+const mysql = require('mysql');
+const app = express();
+const port = 3000;
+
+// Conexão com o banco de dados
+const db = mysql.createConnection({
+  host: 'localhost',  // Ajuste para o seu host de banco de dados
+  user: 'root',       // Usuário do banco de dados
+  password: '',       // Senha do banco de dados
+  database: 'aula10_tarefa' // Nome do banco de dados
+});
+
+db.connect((err) => {
+  if (err) {
+    console.error('Erro de conexão com o banco de dados:', err);
+    process.exit();
+  }
+  console.log('Conectado ao banco de dados MySQL!');
+});
+
+// Middleware para tratar o corpo das requisições em JSON
+app.use(express.json());
+
+// --- Rotas para Aluno ---
+
+// GET /alunos - Retorna todos os alunos com as informações da disciplina
+app.get('/alunos', (req, res) => {
+  const query = `
+    SELECT Aluno.*, Disciplina.nome AS disciplina_nome
+    FROM Aluno
+    LEFT JOIN Disciplina ON Aluno.fk_idTurma = Disciplina.id
+  `;
+  
+  db.query(query, (err, results) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(results);
+  });
+});
+
+// GET /alunos/:id - Retorna um aluno específico com dados da disciplina
+app.get('/alunos/:id', (req, res) => {
+  const query = `
+    SELECT Aluno.*, Disciplina.nome AS disciplina_nome
+    FROM Aluno
+    LEFT JOIN Disciplina ON Aluno.fk_idTurma = Disciplina.id
+    WHERE Aluno.id = ?
+  `;
+
+  db.query(query, [req.params.id], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    if (result.length === 0) {
+      return res.status(404).json({ message: 'Aluno não encontrado' });
+    }
+    res.json(result[0]);
+  });
+});
+
+// POST /alunos - Cria um novo aluno
+app.post('/alunos', (req, res) => {
+  const { nome, idade, ra, fk_idTurma } = req.body;
+
+  const query = `
+    INSERT INTO Aluno (nome, idade, ra, fk_idTurma)
+    VALUES (?, ?, ?, ?)
+  `;
+
+  db.query(query, [nome, idade, ra, fk_idTurma], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.status(201).json({ message: 'Aluno criado com sucesso', id: result.insertId });
+  });
+});
+
+// PATCH /alunos/:id - Atualiza os dados de um aluno
+app.patch('/alunos/:id', (req, res) => {
+  const { nome, idade, ra, fk_idTurma } = req.body;
+  const query = `
+    UPDATE Aluno SET nome = ?, idade = ?, ra = ?, fk_idTurma = ?
+    WHERE id = ?
+  `;
+
+  db.query(query, [nome, idade, ra, fk_idTurma, req.params.id], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Aluno não encontrado' });
+    }
+    res.json({ message: 'Aluno atualizado com sucesso' });
+  });
+});
+
+// DELETE /alunos/:id - Deleta um aluno
+app.delete('/alunos/:id', (req, res) => {
+  const query = `DELETE FROM Aluno WHERE id = ?`;
+
+  db.query(query, [req.params.id], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Aluno não encontrado' });
+    }
+    res.json({ message: 'Aluno deletado com sucesso' });
+  });
+});
+
+// --- Rotas para Disciplina ---
+
+// GET /disciplinas - Retorna todas as disciplinas
+app.get('/disciplinas', (req, res) => {
+  const query = `SELECT * FROM Disciplina`;
+
+  db.query(query, (err, results) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(results);
+  });
+});
+
+// GET /disciplinas/:id - Retorna uma disciplina específica com os alunos associados
+app.get('/disciplinas/:id', (req, res) => {
+  const query = `
+    SELECT Disciplina.*, Aluno.nome AS aluno_nome
+    FROM Disciplina
+    LEFT JOIN Aluno ON Disciplina.id = Aluno.fk_idTurma
+    WHERE Disciplina.id = ?
+  `;
+
+  db.query(query, [req.params.id], (err, results) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    if (results.length === 0) {
+      return res.status(404).json({ message: 'Disciplina não encontrada' });
+    }
+    res.json(results);
+  });
+});
+
+// DELETE /disciplinas/:id - Deleta uma disciplina e todos os alunos associados a ela
+app.delete('/disciplinas/:id', (req, res) => {
+  const query = `DELETE FROM Disciplina WHERE id = ?`;
+
+  db.query(query, [req.params.id], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Disciplina não encontrada' });
+    }
+    res.json({ message: 'Disciplina e seus alunos deletados com sucesso' });
+  });
+});
+
+// Iniciar o servidor
+app.listen(port, () => {
+  console.log(`API rodando na porta ${port}`);
+});
+Descrição das Rotas da API:
+GET /alunos: Retorna todos os alunos com o nome da disciplina associada.
+GET /alunos/
+: Retorna um aluno específico com os dados da disciplina associada.
+POST /alunos: Cria um novo aluno, associando-o a uma disciplina.
+PATCH /alunos/
+: Atualiza os dados de um aluno específico.
+DELETE /alunos/
+: Deleta um aluno específico.
+GET /disciplinas: Retorna todas as disciplinas.
+GET /disciplinas/
+: Retorna uma disciplina específica com todos os alunos associados a ela.
+DELETE /disciplinas/
+: Deleta uma disciplina específica e todos os alunos associados a ela.
+Passo 3: Execução
+Para executar o projeto, certifique-se de ter o Node.js instalado.
+Crie um novo diretório e dentro dele execute o comando npm init -y para gerar um package.json.
+Instale as dependências necessárias com o comando:
+bash
+Copiar código
+npm install express mysql
+Copie o código da API para o arquivo server.js.
+Execute o servidor com:
+bash
+Copiar código
+node server.js
